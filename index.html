@@ -1,0 +1,421 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Frame Picture Generator</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css" rel="stylesheet" />
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: linear-gradient(135deg, #e0eafc, #cfdef3);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100vh;
+      padding: 20px;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    h1 {
+      margin: 20px 0;
+      color: #333;
+      font-size: 1.5rem;
+      text-align: center;
+    }
+    .container {
+      background: white;
+      padding: 20px;
+      border-radius: 16px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      width: 100%;
+      max-width: 500px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 15px;
+    }
+    #image, #canvas {
+      max-width: 100%;
+      max-height: 60vh;
+      border-radius: 12px;
+      touch-action: none;
+    }
+    .upload-options {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+      flex-direction: column;
+    }
+    button, .file-input-label {
+      font-size: 0.9rem;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      width: 100%;
+      box-sizing: border-box;
+      -webkit-appearance: none;
+      text-align: center;
+    }
+    .file-input-label {
+      background-color: #28a745;
+      color: white;
+      display: block;
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+    }
+    button:hover, button:active, .file-input-label:hover, .file-input-label:active {
+      opacity: 0.9;
+      transform: scale(0.98);
+    }
+    #cameraInput {
+      display: none;
+    }
+    #galleryInput {
+      display: none;
+    }
+    #crop, #edit, #download, #copy {
+      display: none;
+    }
+    .button-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+    }
+    .status-message {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 5px;
+      display: none;
+      width: 100%;
+      text-align: center;
+      font-size: 0.9rem;
+    }
+    .success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    @media (min-width: 768px) {
+      .upload-options, .button-group {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      button, .file-input-label {
+        width: auto;
+      }
+      h1 {
+        font-size: 2rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Frame Picture Generator</h1>
+  <h3>1st Anniversary - Maroon Frame</h3>
+  <div class="container">
+    <div class="upload-options">
+      <label for="cameraInput" class="file-input-label">Take Photo</label>
+      <input type="file" id="cameraInput" accept="image/*" capture="environment" />
+      
+      <label for="galleryInput" class="file-input-label">Choose from Gallery</label>
+      <input type="file" id="galleryInput" accept="image/*" />
+    </div>
+    
+    <img id="image" style="display: none;" />
+    <canvas id="canvas" style="display: none;"></canvas>
+    <div class="button-group">
+      <button id="crop">Crop & Frame</button>
+      <button id="edit">Edit Again</button>
+      <button id="download">Download</button>
+      <button id="copy">Copy & Save</button>
+    </div>
+    <div id="statusMessage" class="status-message"></div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
+  <script>
+    let cropper;
+    let originalImageSrc;
+    let finalImageReady = false;
+
+    const image = document.getElementById('image');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const statusMessage = document.getElementById('statusMessage');
+    const cameraInput = document.getElementById('cameraInput');
+    const galleryInput = document.getElementById('galleryInput');
+
+    function showStatus(message, isSuccess) {
+      statusMessage.textContent = message;
+      statusMessage.className = `status-message ${isSuccess ? 'success' : 'error'}`;
+      statusMessage.style.display = 'block';
+      setTimeout(() => {
+        statusMessage.style.display = 'none';
+      }, 3000);
+    }
+
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const tempImg = new Image();
+        tempImg.onload = function () {
+          // Limit image size for mobile devices
+          const maxSize = 2100;
+          let width = tempImg.width;
+          let height = tempImg.height;
+          if (width > height && width > maxSize) {
+            height *= maxSize / width;
+            width = maxSize;
+          } else if (height > maxSize) {
+            width *= maxSize / height;
+            height = maxSize;
+          }
+
+          const offscreen = document.createElement('canvas');
+          offscreen.width = width;
+          offscreen.height = height;
+          offscreen.getContext('2d').drawImage(tempImg, 0, 0, width, height);
+          originalImageSrc = offscreen.toDataURL();
+
+          image.src = originalImageSrc;
+          image.style.display = 'block';
+          canvas.style.display = 'none';
+          document.getElementById('crop').style.display = 'inline-block';
+          document.getElementById('edit').style.display = 'none';
+          document.getElementById('download').style.display = 'none';
+          document.getElementById('copy').style.display = 'none';
+          finalImageReady = false;
+
+          if (cropper) cropper.destroy();
+          
+          // Mobile-friendly cropper settings
+          cropper = new Cropper(image, {
+            aspectRatio: 1,
+            viewMode: 1,
+            dragMode: 'move',
+            responsive: true,
+            restore: true,
+            guides: true,
+            center: true,
+            highlight: true,
+            cropBoxMovable: true,
+            cropBoxResizable: true,
+            toggleDragModeOnDblclick: false,
+            minContainerWidth: 300,
+            minContainerHeight: 300
+          });
+        };
+        tempImg.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+      
+      // Reset the input to allow selecting the same file again
+      event.target.value = '';
+    }
+
+    // Improved mobile-friendly download function
+    function downloadImage() {
+      try {
+        canvas.toBlob(function(blob) {
+          if (window.navigator.msSaveOrOpenBlob) {
+            // For IE/Edge
+            window.navigator.msSaveOrOpenBlob(blob, 'framed-image.png');
+          } else {
+            // For other browsers
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.download = 'framed-image-' + new Date().getTime() + '.png';
+            link.href = url;
+            
+            // For iOS Safari
+            if (/(iP)/g.test(navigator.userAgent)) {
+              const reader = new FileReader();
+              reader.onloadend = function() {
+                const newWindow = window.open();
+                newWindow.document.write('<img src="' + reader.result + '" />');
+                showStatus("Image opened in new tab. Press and hold to save.", true);
+              };
+              reader.readAsDataURL(blob);
+              return;
+            }
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Clean up memory
+            setTimeout(() => {
+              URL.revokeObjectURL(url);
+            }, 100);
+          }
+          showStatus("Image downloaded successfully!", true);
+        }, 'image/png');
+      } catch (err) {
+        console.error('Download error:', err);
+        showStatus("Failed to download. Try pressing and holding the image to save.", false);
+      }
+    }
+
+    // Set up event listeners for both camera and gallery inputs
+    cameraInput.addEventListener('change', handleFileSelect);
+    galleryInput.addEventListener('change', handleFileSelect);
+
+    document.getElementById('crop').addEventListener('click', function () {
+      const croppedCanvas = cropper.getCroppedCanvas();
+      const frameImg = new Image();
+
+      frameImg.onload = function () {
+        canvas.width = croppedCanvas.width;
+        canvas.height = croppedCanvas.height;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(croppedCanvas, 0, 0);
+        ctx.drawImage(frameImg, 0, 0, canvas.width, canvas.height);
+
+        image.style.display = 'none';
+        canvas.style.display = 'block';
+        document.getElementById('crop').style.display = 'none';
+        document.getElementById('edit').style.display = 'inline-block';
+        document.getElementById('download').style.display = 'inline-block';
+        document.getElementById('copy').style.display = 'inline-block';
+
+        finalImageReady = true;
+
+        cropper.destroy();
+      };
+
+      frameImg.onerror = function () {
+        showStatus("⚠️ 'frame.png' not found. Please place it in the same folder.", false);
+      };
+
+      frameImg.src = 'frame1.png';
+    });
+
+    document.getElementById('edit').addEventListener('click', function () {
+      image.src = originalImageSrc;
+      image.style.display = 'block';
+      canvas.style.display = 'none';
+      document.getElementById('crop').style.display = 'inline-block';
+      document.getElementById('edit').style.display = 'none';
+      document.getElementById('download').style.display = 'none';
+      document.getElementById('copy').style.display = 'none';
+      finalImageReady = false;
+
+      if (cropper) cropper.destroy();
+      cropper = new Cropper(image, {
+        aspectRatio: 1,
+        viewMode: 1,
+        dragMode: 'move',
+        responsive: true
+      });
+    });
+
+    document.getElementById('download').addEventListener('click', function () {
+      if (!finalImageReady) {
+        showStatus("Please crop and frame the image before downloading.", false);
+        return;
+      }
+      downloadImage();
+    });
+
+    document.getElementById('copy').addEventListener('click', async function () {
+      if (!finalImageReady) {
+        showStatus("Please crop and frame the image before copying.", false);
+        return;
+      }
+
+      // First ensure the image is downloaded
+      downloadImage();
+      
+      // Then try to copy to clipboard (works only on some mobile browsers)
+      try {
+        if (!navigator.clipboard || !navigator.clipboard.write) {
+          return; // Skip on unsupported browsers
+        }
+
+        const blob = await new Promise(resolve => {
+          canvas.toBlob(resolve, 'image/png');
+        });
+        
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'image/png': blob
+          })
+        ]);
+        showStatus("Image copied to clipboard!", true);
+      } catch (err) {
+        console.error('Clipboard error:', err);
+      }
+    });
+
+    // Prevent zooming on mobile devices
+    document.addEventListener('touchmove', function (event) {
+      if (event.scale !== 1) { event.preventDefault(); }
+    }, { passive: false });
+
+    // Handle iOS orientation change
+    window.addEventListener('orientationchange', function() {
+      if (cropper) {
+        setTimeout(() => {
+          cropper.reset();
+        }, 300);
+      }
+    });
+    // Disable right-click and keyboard shortcuts
+document.addEventListener('contextmenu', function(e) {
+  e.preventDefault();
+});
+
+document.addEventListener('keydown', function(e) {
+  if (e.ctrlKey && (e.keyCode === 85 || e.keyCode === 117)) { // Ctrl+U
+    e.preventDefault();
+  }
+  if (e.keyCode === 123) { // F12
+    e.preventDefault();
+  }
+});
+  </script>
+  <footer style="
+  margin: 30px 0 20px;
+  text-align: center;
+  color: #555;
+  font-size: 0.9rem;
+  padding: 15px 0;
+  width: 100%;
+  font-family: 'Segoe UI', sans-serif;
+  position: relative;
+">
+  <span style="
+      display: inline-block;
+      position: relative;
+      padding: 0 10px;
+  ">
+      Designed and made by <strong style="color: #007bff;"><a href="https://www.facebook.com/saadabrar.06/" target="_blank">Saad Abrar</a></strong>
+      <span style="
+          position: absolute;
+          bottom: -2px;
+          left: 0;
+          width: 100%;
+          height: 1px;
+          background: linear-gradient(90deg, transparent, #007bff, transparent);
+          opacity: 0.5;
+      "></span>
+  </span>
+</footer>
+</body>
+</html>
